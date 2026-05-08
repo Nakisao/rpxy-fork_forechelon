@@ -12,6 +12,8 @@ import (
 var timeout, _ = strconv.Atoi(os.Getenv("TIMEOUT"))
 var retries, _ = strconv.Atoi(os.Getenv("RETRIES"))
 var port = os.Getenv("PORT")
+var proxyKey = os.Getenv("KEY")
+var allowedPlaceID = os.Getenv("ALLOWED_PLACE_ID")
 
 var client *fasthttp.Client
 
@@ -29,12 +31,26 @@ func main() {
 }
 
 func requestHandler(ctx *fasthttp.RequestCtx) {
-	val, ok := os.LookupEnv("KEY")
-
-	if ok && string(ctx.Request.Header.Peek("PROXYKEY")) != val {
+	// Validate PROXYKEY header if KEY is set
+	if proxyKey != "" && string(ctx.Request.Header.Peek("PROXYKEY")) != proxyKey {
 		ctx.SetStatusCode(407)
 		ctx.SetBody([]byte("Missing or invalid PROXYKEY header."))
 		return
+	}
+
+	// Validate Place ID if ALLOWED_PLACE_ID is set
+	if allowedPlaceID != "" {
+		placeID := string(ctx.Request.Header.Peek("Roblox-Id"))
+		if placeID == "" {
+			ctx.SetStatusCode(403)
+			ctx.SetBody([]byte("Missing Roblox-Id header."))
+			return
+		}
+		if placeID != allowedPlaceID {
+			ctx.SetStatusCode(403)
+			ctx.SetBody([]byte("Unauthorized Place ID. Request rejected."))
+			return
+		}
 	}
 
 	if len(strings.SplitN(string(ctx.Request.Header.RequestURI())[1:], "/", 2)) < 2 {
@@ -75,6 +91,7 @@ func makeRequest(ctx *fasthttp.RequestCtx, attempt int) *fasthttp.Response {
 	})
 	req.Header.Set("User-Agent", "RoProxy")
 	req.Header.Del("Roblox-Id")
+	req.Header.Del("PROXYKEY")
 	resp := fasthttp.AcquireResponse()
 
 	err := client.Do(req, resp)
