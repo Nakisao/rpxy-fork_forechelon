@@ -31,6 +31,13 @@ func main() {
 }
 
 func requestHandler(ctx *fasthttp.RequestCtx) {
+	// Health check endpoint.
+	if string(ctx.Path()) == "/health" {
+		ctx.SetStatusCode(200)
+		ctx.SetBody([]byte("ok"))
+		return
+	}
+
 	// Validate PROXYKEY header if KEY is set
 	if proxyKey != "" && string(ctx.Request.Header.Peek("PROXYKEY")) != proxyKey {
 		ctx.SetStatusCode(407)
